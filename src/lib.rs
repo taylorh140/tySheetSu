@@ -2,6 +2,7 @@ use wasm_minimal_protocol::*;
 use serde_json::{json, Value};
 use umya_spreadsheet::*;
 use std::io::Cursor;
+use serde_json::Map;
 
 initiate_protocol!();
 
@@ -30,7 +31,6 @@ fn convert_sheet_to_json_values(sheet: &Worksheet,book:&Spreadsheet) -> Result<V
         let cell_row = cell_coordinate.get_row_num();
         let cell_col = cell_coordinate.get_col_num();
     
-        let mut found_range: Option<&Range> = None;
 
         // Keep the cell if it's not within any merge range or if it's at the top-left of a merge range
 
@@ -44,8 +44,17 @@ fn convert_sheet_to_json_values(sheet: &Worksheet,book:&Spreadsheet) -> Result<V
         
     }
 
+    // Sort the cells_data by row (y) and column (x) to maintain a consistent order
+    cells_data.sort_by(|a, b| {
+        let a_y = a["y"].as_i64().unwrap();
+        let a_x = a["x"].as_i64().unwrap();
+        let b_y = b["y"].as_i64().unwrap();
+        let b_x = b["x"].as_i64().unwrap();
+        (a_y, a_x).cmp(&(b_y, b_x))
+    });
+
     Ok(json!({
-        "cells":json!(cells_data)
+        "cells": cells_data
     }))
 }
 
@@ -164,6 +173,17 @@ fn convert_sheet_to_json(sheet: &Worksheet,book:&Spreadsheet) -> Result<Value, S
         });
         rows_data.push(tmp_row_data);
     }
+
+
+    // Sort the cells_data by row (y) and column (x) to maintain a consistent order
+    cells_data.sort_by(|a, b| {
+        let a_y = a["y"].as_i64().unwrap();
+        let a_x = a["x"].as_i64().unwrap();
+        let b_y = b["y"].as_i64().unwrap();
+        let b_x = b["x"].as_i64().unwrap();
+        (a_y, a_x).cmp(&(b_y, b_x))
+    });
+
 
     Ok(json!({
         "columns":json!(columns_data),

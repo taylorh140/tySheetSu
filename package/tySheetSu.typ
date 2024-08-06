@@ -6,10 +6,7 @@
 }
 
 #let parse-sheet-data(xlsxBytes, sheetname) = {
-  let xlsx = (
-    json: json.decode(ss.excel_to_json_values(xlsxBytes, bytes(sheetname))),
-  )
-  return xlsx
+  return json.decode(ss.excel_to_json_values(xlsxBytes, bytes(sheetname))).cells
 }
 
 #let parse-range(rng, use-merge: true) = {
@@ -40,9 +37,10 @@
 
 
 #let rangeFn = range;
-#let xlsx-draw-table(
+#let render-table(
   xlsx,
   range: none,
+  scale : 1,
   use-merge: true,
   use-color: true,
   use-boarders: true,
@@ -73,15 +71,15 @@
   let align-vertical-transforms = (
     top: top,
     center: horizon,
-
+    bottom: bottom,
   )
   
 
   // Use excel scaling (this is hacky)
   let weirdExcelScaleX = 5 / 8.43 * 1em
   let weirdExcelScaleY = 5 / 38.4 * 1em
-  let weridExcelRowHeightDefault = 14.4
-  let weirdExcelColWidthDefault = 8.75
+  let weridExcelRowHeightDefault = 14.4 * scale
+  let weirdExcelColWidthDefault = 8.75 * scale
 
   //Find column row dimensions
   let min-Col = calc.min(..tabledata.map(x => x.x))
@@ -95,11 +93,13 @@
         0,
         default: (height: weirdExcelColWidthDefault),
       ))
-    .map(x => if (x.width == 0 and x.hidden == false) {
+    .map(x => if ("width" in x and x.width == 0 and "hidden" in x and x.hidden == false) {
     weirdExcelColWidthDefault * weirdExcelScaleX
-  } else if x.hidden==true { 0pt}
-  else {
+  } else if "hidden" in x and x.hidden==true { 0pt}
+  else if "width" in x {
     x.width * weirdExcelScaleX
+  } else {
+    weridExcelRowHeightDefault * weirdExcelScaleX
   })
 
   //Set row heights based on excel input using odd number for default
@@ -110,9 +110,11 @@
       ))
     .map(x => if (x.height == 0 and x.hidden == false) {
     weridExcelRowHeightDefault * weirdExcelScaleY
-  } else if x.hidden==true { 0pt}
-  else {
+  } else if "hidden" in x and x.hidden==true { 0pt}
+  else if "height" in x {
     x.height * weirdExcelScaleY
+  } else {
+    weridExcelRowHeightDefault * weirdExcelScaleY
   })
 
   //Draw the table using the information
@@ -150,21 +152,30 @@
       fill: if (
         ("fill_color" in cel) and (cel.fill_color != "") and use-color
       ) {
-        color.rgb("#" + cel.fill_color.slice(-6))
+        let tmp = cel.fill_color
+        while(tmp.len() < 6){
+          tmp = "0" + tmp
+        }
+        color.rgb("#" + tmp.slice(-6))
       } else {
         none
       },
+      align: if alignment in cel {align-horizontal-transforms.at(cel.alignment.horizontal) + align-vertical-transforms.at(cel.alignment.vertical)} else {left+bottom},
       {
-
-      let text-align = if alignment in cel {align-horizontal-transforms.at(cel.alignment.horizontal)} else {left}
-      box(
-        inset:0pt,
-        //stroke:red+0.8pt,
-        width: colwidths.at(cel.x - 1),
-        height: rowHeights.at(cel.y - 1) - default-padding,
-        clip: true,
-        align(text-align)[#box(inset:0.2em,cel.value)],
-      )
+      
+      let rot = if alignment in cel and "rot" in  cel.alignment {cel.alignment.rot * -1deg} else {0deg}
+      
+      align(
+        if alignment in cel {align-horizontal-transforms.at(cel.alignment.horizontal) + align-vertical-transforms.at(cel.alignment.vertical)} else {left+bottom},
+        box(
+          inset:0pt,
+          //stroke:red+0.8pt,
+          width: colwidths.at(cel.x - 1),
+          height: rowHeights.at(cel.y - 1) - default-padding,
+          clip: true,
+          [#box(inset:0.2em,rotate(rot,cel.value, reflow: true))],
+        )
+        )
       },
     ))
   )
@@ -186,23 +197,25 @@ The rendered Excel file looks like this:
 
 #figure(
   caption: [Rendered Table],
-  xlsx-draw-table(myxlsx, range: "A1:E20", use-boarders: true),
+  render-table(myxlsx, range: "A1:E20", use-boarders: true, use-merge: true),
 )
- 
+
+
+#pagebreak()
+#let themesFile = read("ThemeColors.xlsx", encoding: none);
+#let colorSheet = parse-sheet(themesFile, "Sheet1")
+
+#figure(
+  caption: [Colors Table],
+    render-table(colorSheet, range: none,scale:0.45),
+)
+
+
 #pagebreak()
 
 Here we are only extracting the values using excel_to_json_values.
 
 #let myxlsxv = parse-sheet-data(xlsxBytes, "Sheet1")
 
-#myxlsxv
-
-#let sheet-data-as-array(sheet-data) = {
-  let a = sheet-data.json.cells
-  a.sorted(key: q => q.x).sorted(key: q => q.y).map(x => x.value)
-}
-
-#sheet-data-as-array(myxlsxv)
-
-#table(columns: 6,
-  ..sheet-data-as-array(myxlsxv))
+#table(columns: calc.max(..myxlsxv.map(x=>x.x)),
+  ..myxlsxv.map(x=>x.value))

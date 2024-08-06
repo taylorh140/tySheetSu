@@ -5,6 +5,11 @@ import subprocess
 
 
 # Check if the correct number of arguments is provided
+
+# if __name__ == "__main__":
+#     arg1 = r"C:\WORK\TypstStuff\tySheetSu\target\wasm32-unknown-unknown\debug\tySheetSu.wasm"
+#     arg2 = r"C:\WORK\TypstStuff\tySheetSu\package\tySheetSu1.wasm"
+# else:
 if len(sys.argv) != 3:
     print("Usage: ./Patch.sh Input_wasm Output_wasm")
     sys.exit(1)
@@ -21,6 +26,8 @@ print("Argument 2:", arg2)
 result = subprocess.run(['wasm2wat', arg1], stdout=subprocess.PIPE)
 wat = result.stdout.decode('utf-8') #Path('Pre-patched-dot.wat').read_text()
 
+print(wat[0:4500])
+
 types={}
 exports = {}
 imports = {}
@@ -29,14 +36,19 @@ replacments = {}
 for _ in re.findall(r"\s*\(type \(;(\d+);\) \(func ?(\(param ([^\)]+)\))? ?(\(result ([^\)]+)\))?\)\)",wat):
     types[_[0]]=(_[1],_[3],_[4])
 
-for _ in re.findall(r"(\(import ([^\(]+)\(func \(;(\d+);\) \(type (\d+)\)\)\))",wat):
-    fimport,fname,fnum,ftype = _
+for _ in re.findall(r"(\(import ([^\(]+?)\(func (\(;(\d+);\)|\S+) \(type (\d+)\)\)\))",wat):
+    fimport,fname,fcallname,fnum,ftype = _
+    #print(fimport,fname,fnum,ftype)
     fname=fname.strip()
     params,rtn_statement,rtn_type = types[ftype]
     imports[fname]=dict(fimport=fimport,fname=fname,fnum=fnum,ftype=ftype,params=params,rtn_statement=rtn_statement,rtn_type=rtn_type)
-    print("check sane",imports[fname])
+    #print("check sane",imports[fname])
 
-    rep=f"(func (;{fnum};) {params} {rtn_statement} {'' if rtn_type=='' else rtn_type+'.const 0 return '} )"
+    print(fcallname)
+    if "$" in fcallname:
+        rep=f"(func {fcallname} {params} {rtn_statement} {'' if rtn_type=='' else rtn_type+'.const 0 return '} )"
+    else:
+        rep=f"(func (;{fnum};) {params} {rtn_statement} {'' if rtn_type=='' else rtn_type+'.const 0 return '} )"
 
     if "\"typst_env\"" in fimport:
         continue
@@ -44,6 +56,8 @@ for _ in re.findall(r"(\(import ([^\(]+)\(func \(;(\d+);\) \(type (\d+)\)\)\))",
     if fimport in wat:
         replacments[fimport]=rep
     #wat=wat.replace(_[0],rep)
+
+
 
 for _ in re.findall(r"(\(export ([^\(]+)\(func (\d+)\)\))",wat):
     fexport,fname,fnum = _

@@ -10,11 +10,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 wasm-minimal-protocol = { git = "https://github.com/astrale-sharp/wasm-minimal-protocol" }
-umya-spreadsheet = "1.2.6"
+umya-spreadsheet = "2.0.1"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = {version = "1.0.114", features = ["preserve_order"] }
 getrandom = { version = "0.2.12", features = ["custom"] }
-
+indexmap = {version = "2.3.0", features = ["serde"]}
 
 [profile.dev]
 lto = true          # Enable link-time optimization
